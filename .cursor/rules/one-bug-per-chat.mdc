@@ -1,0 +1,46 @@
+---
+description: Bug-fix discipline — reproduce, fix, write manual verification steps, wait for user confirmation before closing
+alwaysApply: true
+---
+
+# Bug-fix discipline
+
+When the user reports a bug (any chat starting with `bug:` or any turn where the user says "X doesn't work" / "I'm getting error Y"), follow this protocol strictly. **Do not mix bug-fixing with new feature work.** If the user mid-chat asks for a new feature, suggest opening a new `feat:` chat.
+
+## Protocol
+
+### 1. Reproduce
+- State the exact steps you understand the user took.
+- State the expected vs actual behavior.
+- If you can't reproduce from description alone, ask one focused question (logs, screenshot, exact path). Do not guess.
+
+### 2. Locate the layer
+Per `.cursor/rules/flutter-architecture.mdc`, identify which layer owns the bug: Presentation, Application, Domain, Data, or Core. Cross-layer bugs are a smell — flag them.
+
+### 3. Fix
+- Make the smallest change that closes the bug.
+- Don't refactor unrelated code, even if it looks bad. Add a follow-up to `docs/FOLLOWUPS.md` instead.
+- If the fix touches more than 3 files, pause and explain the blast radius before continuing.
+
+### 4. Write manual verification steps
+At the end of your message, include a numbered "How to verify" list the user can run in 60 seconds. Format:
+
+```
+How to verify:
+1. ...
+2. ...
+3. Expected: ...
+```
+
+### 5. Wait for confirmation
+Do **not** declare the bug fixed. Use phrases like "Fix proposed" or "Ready for verification". Wait for the user to test and confirm.
+
+### 6. Close
+When the user confirms, append a one-line entry to `docs/STATE.md` under "Last verified working" with date + bug description. Then this chat is closed — new bugs go in new chats.
+
+## What NOT to do
+
+- ❌ Fix multiple unrelated bugs in one chat.
+- ❌ Add features while fixing bugs.
+- ❌ Say "I've fixed the bug" before the user confirms — you can only say "Fix proposed".
+- ❌ Skip the verification steps section.

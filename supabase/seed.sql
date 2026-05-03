@@ -1,0 +1,11 @@
+-- Local-development seed file.
+--
+-- All reference data (SoHo polygon, interests catalog, banned hashtags,
+-- feature flag definitions) was promoted to a versioned migration so it is
+-- applied to every environment via `supabase db push`. See:
+--
+--   supabase/migrations/20260417180012_reference_data.sql
+--
+-- Add ONLY local-dev-specific seed data here (e.g. fake test users, sample
+-- listings for storyboarding the UI). Anything added here will run via
+-- `supabase db reset` locally, but will NOT be pushed to staging or prod.

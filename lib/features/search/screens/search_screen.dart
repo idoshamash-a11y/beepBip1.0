@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -111,6 +112,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
+          _BrowseListingsCard(onTap: () => context.push('/listings')),
+          const SizedBox(height: 16),
           if (_recentSearches.isNotEmpty) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -281,4 +284,88 @@ class _ResultList extends StatelessWidget {
 class _Result {
   final String id, title, subtitle, avatar, type;
   const _Result({required this.id, required this.title, required this.subtitle, required this.avatar, required this.type});
+}
+
+/// Pinned hero card pointing into the listings vertical. Replaces the empty
+/// "search but for nothing real" feel of this screen until we wire up the
+/// proper full-text + hashtag search against `public.listings.search_vector`.
+class _BrowseListingsCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _BrowseListingsCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.accent.withValues(alpha: 0.18),
+                AppColors.accent.withValues(alpha: 0.06),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.45),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Browse listings in SoHo',
+                      style: GoogleFonts.outfit(
+                        color: c.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Services, items and events from local businesses',
+                      style: GoogleFonts.outfit(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: AppColors.accent,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

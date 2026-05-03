@@ -21,22 +21,37 @@ enum ProfileType {
 
 enum SubscriptionTier {
   free,
-  premium;
+  businessPro;
 
   String get displayName {
     switch (this) {
       case SubscriptionTier.free:
         return 'Free';
-      case SubscriptionTier.premium:
-        return 'Premium';
+      case SubscriptionTier.businessPro:
+        return 'Business Pro';
+    }
+  }
+
+  /// Value stored in the Postgres `subscription_tier` enum.
+  /// Keep in sync with `supabase/migrations/20260417180001_enums.sql`.
+  String get databaseValue {
+    switch (this) {
+      case SubscriptionTier.free:
+        return 'free';
+      case SubscriptionTier.businessPro:
+        return 'business_pro';
     }
   }
 
   static SubscriptionTier fromString(String value) {
-    return SubscriptionTier.values.firstWhere(
-      (tier) => tier.name == value,
-      orElse: () => SubscriptionTier.free,
-    );
+    switch (value) {
+      case 'free':
+        return SubscriptionTier.free;
+      case 'business_pro':
+        return SubscriptionTier.businessPro;
+      default:
+        return SubscriptionTier.free;
+    }
   }
 }
 

@@ -1,0 +1,113 @@
+# Supabase local dev config for BEEPBIP.
+#
+# Docs: https://supabase.com/docs/guides/cli/config
+# Run `supabase start` in repo root to spin up the local stack.
+
+project_id = "beepbip"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+openai_api_key = "env(OPENAI_API_KEY)"
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://127.0.0.1:3000",
+  "beepbip://auth-callback"
+]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false   # set true in prod; off in local for faster iteration
+secure_password_change = true
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+template = "Your BEEPBIP code is {{ .Code }}"
+max_frequency = "60s"
+
+[auth.external.apple]
+enabled = true
+client_id = "env(APPLE_CLIENT_ID)"
+secret = "env(APPLE_CLIENT_SECRET)"
+redirect_uri = ""
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+redirect_uri = ""
+
+[auth.external.facebook]
+enabled = true
+client_id = "env(FACEBOOK_CLIENT_ID)"
+secret = "env(FACEBOOK_CLIENT_SECRET)"
+redirect_uri = ""
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false
+
+[functions]
+
+# Stripe-related Edge Functions for the Business Page MVP.
+# `verify_jwt = true` means the function expects a logged-in Supabase user;
+# the Flutter client passes the user's auth header via `functions.invoke()`.
+[functions.create-stripe-connect-account]
+verify_jwt = true
+
+[functions.create-booking-checkout]
+verify_jwt = true
+
+# The webhook is hit by Stripe, not by the Flutter app, so we cannot require a
+# Supabase JWT. The function authenticates the request itself by verifying the
+# `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET`.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Dev-only seeding helper. JWT verification is OFF because the Flutter dev
+# tools screen invokes it before any user is signed in. The function itself
+# refuses to run unless SUPABASE_URL is local OR ALLOW_DEV_SEED=true is set.
+# Do NOT register this function in staging / prod environments.
+[functions.dev-seed-mockups]
+verify_jwt = false
+
+[experimental]

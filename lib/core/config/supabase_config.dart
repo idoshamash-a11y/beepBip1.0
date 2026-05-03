@@ -1,14 +1,17 @@
+import 'env.dart';
+
+/// DEPRECATED thin shim around [Env].
+///
+/// All new code should import `env.dart` and use [Env] directly. This file
+/// remains only so existing imports of `supabase_config.dart` keep compiling
+/// during the migration. Remove once no callers reference [SupabaseConfig].
+@Deprecated('Use Env from lib/core/config/env.dart instead.')
 class SupabaseConfig {
-  // TODO: Replace with your actual Supabase URL and Anon Key
-  // Get these from: https://app.supabase.com/project/_/settings/api
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  SupabaseConfig._();
 
-  // Social Auth Configuration
-  // TODO: Configure these in Supabase Dashboard -> Authentication -> Providers
-  static const String googleClientId = 'YOUR_GOOGLE_CLIENT_ID';
-  static const String googleClientSecret = 'YOUR_GOOGLE_CLIENT_SECRET';
+  static String get supabaseUrl     => Env.supabaseUrl;
+  static String get supabaseAnonKey => Env.supabasePublishableKey;
 
-  static const String facebookAppId = 'YOUR_FACEBOOK_APP_ID';
-  static const String facebookAppSecret = 'YOUR_FACEBOOK_APP_SECRET';
+  static String get googleClientId  => Env.googleIosClientId;
+  static String get facebookAppId   => Env.facebookAppId;
 }

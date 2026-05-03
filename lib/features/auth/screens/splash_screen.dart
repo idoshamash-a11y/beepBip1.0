@@ -50,12 +50,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _startSequence() async {
     await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
     _logoController.forward();
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     _pulseController.repeat();
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     _textController.forward();
     await Future.delayed(const Duration(milliseconds: 1600));
+    if (!mounted) return;
     _navigate();
   }
 
@@ -214,7 +218,9 @@ class _LoadingDotsState extends State<_LoadingDots> with TickerProviderStateMixi
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 

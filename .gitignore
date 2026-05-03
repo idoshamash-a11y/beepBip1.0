@@ -84,11 +84,23 @@ app.*.map.json
 .env
 .env.local
 .env.*.local
+.env.dev
+.env.staging
+.env.prod
+# Local-only file with admin/CLI secrets (DB password, service role key, etc.)
+# that must NEVER ship in the app binary. Not a Flutter asset.
+.env.cli
+.env.cli.*
+# Keep the template checked in so the expected keys are documented.
+!.env.example
 *.key
 *.pem
 google-services.json
 GoogleService-Info.plist
 
-# Configuration files with secrets
-# Uncomment if you want to exclude the config file
-# lib/core/config/supabase_config.dart
+# Supabase CLI
+supabase/.branches/
+supabase/.temp/
+# Edge Function secrets (Stripe, etc.). Template lives at functions/.env.example.
+supabase/functions/.env
+supabase/functions/.env.local

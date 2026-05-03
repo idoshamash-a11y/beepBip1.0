@@ -1,17 +1,37 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, kDebugMode, kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart';
+import '../../../core/config/env.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../posts/providers/posts_provider.dart';
+import '../../posts/models/post_model.dart';
+import '../../posts/providers/posts_providers.dart';
+import '../services/neighborhood_honeycomb.dart';
+import '../widgets/globe_map_embed.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
+}
+
+/// MapLibre globe + H3 honeycomb on **iOS/Android WebView only**.
+///
+/// Flutter **web** stays on [FlutterMap] + MapTiler raster: the iframe+srcdoc
+/// globe embed is fragile (script order, srcdoc size limits, CSP) and often
+/// shows a blank panel while the rest of the UI still paints.
+/// Desktop (macOS/Windows/Linux) also uses [FlutterMap].
+bool _shouldUseGlobeMap(String mapTilerKey) {
+  if (mapTilerKey.isEmpty) return false;
+  if (kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateMixin {
@@ -23,6 +43,13 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
   late Animation<Offset> _bottomSlide;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
+
+  /// Loaded MapTiler vector style. `null` means we haven't loaded one yet (or
+  /// the load failed / no API key was configured), in which case we render the
+  /// raster fallback below. Reloaded whenever the platform brightness changes
+  /// so dark/light variants stay in sync with the app theme.
+  Style? _vectorStyle;
+  Brightness? _styleBrightness;
 
   final List<_NearbyPin> _nearbyPins = [
     _NearbyPin(lat: 40.7148, lng: -74.0038, name: 'Rivera M.', distance: '180m'),
@@ -49,6 +76,59 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
         () => _bottomSheetController.forward());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final brightness = Theme.of(context).brightness;
+    if (_styleBrightness != brightness) {
+      _styleBrightness = brightness;
+      // `vector_map_tiles` does not reliably paint on Flutter web — the style
+      // JSON loads fine but the layer stays blank (gray) while markers/UI
+      // render. iOS/Android keep the vector path for crisp zoom; web uses
+      // MapTiler raster tiles instead (same key, same look, works everywhere).
+      if (!kIsWeb) {
+        _loadVectorStyle(brightness);
+      }
+    }
+  }
+
+  /// Load the MapTiler vector style for the given brightness. Failure is
+  /// non-fatal: we keep the raster fallback so a missing key, network hiccup,
+  /// or MapTiler outage never breaks the map. Theme switches are guarded so a
+  /// stale request can't overwrite a newer one. Errors are logged in debug
+  /// mode (only) — useful when CORS or a misconfigured key is the culprit.
+  Future<void> _loadVectorStyle(Brightness brightness) async {
+    if (kIsWeb) return;
+    final apiKey = Env.mapTilerApiKey;
+    if (kDebugMode) {
+      debugPrint(
+          '[map] _loadVectorStyle brightness=$brightness apiKeyLen=${apiKey.length}');
+    }
+    if (apiKey.isEmpty) {
+      if (mounted) setState(() => _vectorStyle = null);
+      return;
+    }
+    final styleId =
+        brightness == Brightness.dark ? 'streets-v2-dark' : 'streets-v2-light';
+    try {
+      final style = await StyleReader(
+        uri: 'https://api.maptiler.com/maps/$styleId/style.json?key={key}',
+        apiKey: apiKey,
+      ).read();
+      if (kDebugMode) {
+        debugPrint('[map] MapTiler vector style loaded ($styleId)');
+      }
+      if (!mounted || _styleBrightness != brightness) return;
+      setState(() => _vectorStyle = style);
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[map] MapTiler vector style load failed: $e\n$st');
+      }
+      if (!mounted) return;
+      setState(() => _vectorStyle = null);
+    }
+  }
+
   Future<void> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
@@ -61,7 +141,9 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
     final position = await Geolocator.getCurrentPosition();
     if (mounted) {
       setState(() => _currentLocation = LatLng(position.latitude, position.longitude));
-      _mapController.move(_currentLocation!, 15.0);
+      if (!_shouldUseGlobeMap(Env.mapTilerApiKey)) {
+        _mapController.move(_currentLocation!, 15.0);
+      }
     }
   }
 
@@ -76,19 +158,68 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     final c = context.colors;
     final isDark = context.isDark;
-    final posts = ref.watch(postsProvider);
+    // Posts no longer carry per-post coordinates (schema dropped `location`
+    // from `public.posts` — visibility flows from profile-level location
+    // sharing, MVP §3.2). We still surface the count in the bottom card so
+    // users can see neighborhood activity at a glance, but post pins on the
+    // map are deferred until the locations table is wired up (FOLLOWUPS).
+    final postsAsync = ref.watch(neighborhoodPostsProvider);
+    final posts = postsAsync.asData?.value ?? const <Post>[];
     final center = _currentLocation ?? const LatLng(40.7128, -74.0060);
 
-    final tileUrl = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    final mapTilerKey = Env.mapTilerApiKey;
+    // Vector tiles only on mobile/desktop native — see didChangeDependencies.
+    final useVectorTiles = _vectorStyle != null && !kIsWeb;
+
+    // Raster basemap: prefer MapTiler PNG tiles when a key is set (required on
+    // web; also used as the loading/fallback path on native until vector style
+    // is ready). Without a key, fall back to CartoDB (Voyager / dark_all).
+    final String rasterTileUrl = mapTilerKey.isNotEmpty
+        ? 'https://api.maptiler.com/maps/'
+            '${isDark ? 'streets-v2-dark' : 'streets-v2-light'}'
+            '/{z}/{x}/{y}.png?key=$mapTilerKey'
+        : (isDark
+            ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+            : 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png');
+    final mapDataAttribution = (useVectorTiles || mapTilerKey.isNotEmpty)
+        ? 'MapTiler'
+        : 'CARTO';
+
+    final useGlobe = _shouldUseGlobeMap(mapTilerKey);
+    final pinRecords = _nearbyPins
+        .map((p) => (lat: p.lat, lng: p.lng, name: p.name))
+        .toList();
+    // Cap hex count embedded in the globe HTML string (WebView loadHtmlString /
+    // iframe srcdoc must stay small or the document fails to render).
+    final honeyB64 = NeighborhoodHoneycomb.honeycombGeoJsonBase64(
+      center: center,
+      radiusKm: _radius,
+      maxCells: useGlobe ? 150 : null,
+    );
+    final pinsB64 = NeighborhoodHoneycomb.pinsGeoJsonBase64(pins: pinRecords);
 
     return Scaffold(
       backgroundColor: c.bg,
       body: Stack(
         children: [
           Positioned.fill(
-            child: FlutterMap(
+            child: useGlobe
+                ? GlobeMapEmbed(
+                    key: ValueKey(Object.hash(
+                      honeyB64,
+                      pinsB64,
+                      _currentLocation?.latitude,
+                      _currentLocation?.longitude,
+                      isDark,
+                    )),
+                    mapTilerKey: mapTilerKey,
+                    center: center,
+                    isDark: isDark,
+                    honeyBase64: honeyB64,
+                    pinsBase64: pinsB64,
+                    userLocation: _currentLocation,
+                  )
+                : FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: center,
@@ -98,15 +229,37 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                 interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
               ),
               children: [
-                TileLayer(
-                  urlTemplate: tileUrl,
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.beepbip.app',
+                if (useVectorTiles)
+                  VectorTileLayer(
+                    theme: _vectorStyle!.theme,
+                    sprites: _vectorStyle!.sprites,
+                    tileProviders: _vectorStyle!.providers,
+                    maximumZoom: 18,
+                  )
+                else
+                  TileLayer(
+                    urlTemplate: rasterTileUrl,
+                  ),
+                PolygonLayer(
+                  polygons: NeighborhoodHoneycomb.flutterMapPolygons(
+                    center: center,
+                    radiusKm: _radius,
+                  ),
+                ),
+                RichAttributionWidget(
+                  alignment: AttributionAlignment.bottomLeft,
+                  showFlutterMapAttribution: false,
+                  attributions: [
+                    TextSourceAttribution(
+                      mapDataAttribution,
+                      onTap: () {},
+                    ),
+                    const TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
                 ),
                 if (_currentLocation != null)
                   MarkerLayer(
                     markers: [
-                      // User location pulse
                       Marker(
                         point: _currentLocation!,
                         width: 56,
@@ -145,23 +298,11 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                           ),
                         ),
                       ),
-                      // Nearby people
                       ..._nearbyPins.map((pin) => Marker(
                         point: LatLng(pin.lat, pin.lng),
                         width: 44, height: 44,
                         child: _UserPin(name: pin.name),
                       )),
-                      // Posts from the feed
-                      ...posts.where((p) => p.hasLocation).map((post) {
-                        final offset = posts.indexOf(post);
-                        final postLat = (_currentLocation?.latitude ?? 40.7128) + (offset * 0.003);
-                        final postLng = (_currentLocation?.longitude ?? -74.0060) + (offset * 0.002);
-                        return Marker(
-                          point: LatLng(postLat, postLng),
-                          width: 140, height: 58,
-                          child: _PostPin(post: post),
-                        );
-                      }),
                     ],
                   ),
               ],
@@ -207,7 +348,8 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                   ),
                 ),
 
-                // Zoom controls
+                // Zoom controls (globe mode uses MapLibre's own control)
+                if (!useGlobe)
                 Positioned(
                   right: 16, top: 80,
                   child: Container(
@@ -271,60 +413,6 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
 }
 
 // ── Widgets ──────────────────────────────────────────────────────────────────
-
-class _PostPin extends StatelessWidget {
-  final dynamic post;
-  const _PostPin({required this.post});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: context.colors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 8, offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.article_outlined, color: AppColors.accent, size: 12),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  post.text.length > 20 ? '${post.text.substring(0, 20)}…' : post.text,
-                  style: GoogleFonts.outfit(
-                    color: context.colors.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: 2, height: 6,
-          color: AppColors.accent.withValues(alpha: 0.6),
-        ),
-        Container(
-          width: 6, height: 6,
-          decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
-        ),
-      ],
-    );
-  }
-}
 
 class _UserPin extends StatelessWidget {
   final String name;

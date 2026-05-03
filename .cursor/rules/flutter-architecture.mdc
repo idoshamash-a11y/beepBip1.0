@@ -1,0 +1,39 @@
+---
+description: BEEPBIP Flutter layer rules — Presentation → Application → Domain → Data → Core. No layer-skipping, no Supabase.instance in UI, all deps via Riverpod.
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# Flutter architecture rules
+
+Full rationale: `docs/ARCHITECTURE.md`. Summary that you must enforce in every edit:
+
+## Layer dependency direction (only direction allowed)
+
+```
+Presentation → Application → Domain ← Data
+                              ↑
+                            Core (used by all)
+```
+
+- **Presentation** (`lib/features/<x>/screens`, `widgets`) → Riverpod `ConsumerWidget`s only. May depend on Application, never on Data directly.
+- **Application** (`lib/features/<x>/providers`, `controllers`) → `StateNotifier` / `Notifier`. Depends on Domain repository **interfaces**, never concrete implementations.
+- **Domain** (`lib/features/<x>/models`, repository interfaces) → **plain Dart only**. No `flutter/`, no `supabase_flutter`, no network. Immutable data + abstract repository classes.
+- **Data** (`lib/features/<x>/repositories`, `services`) → concrete implementations. Talks to Supabase / Stripe / Storage. Maps exceptions → typed `Failure`s.
+- **Core** (`lib/core/**`) → `Failure` hierarchy, `Result<T>`, env config, logging, theming, routing. Zero feature knowledge.
+
+## Hard rules
+
+- ❌ No `Supabase.instance.client` calls in `screens/`, `widgets/`, `controllers/`, or `providers/`. Always inject through a repository.
+- ❌ No `import 'package:flutter/...'` in any file under `domain/` or `models/`.
+- ❌ No `throw` of raw `Exception` across layer boundaries — wrap into a typed `Failure` and return `Result<T>`.
+- ✅ All dependencies flow through Riverpod providers. No singletons, no global state.
+- ✅ Every non-trivial logic must be testable without a running Flutter engine, Supabase, or network.
+
+## When adding a feature
+
+Create the layers in order: Domain (model + repo interface) → Data (repo impl) → Application (controller) → Presentation (screen). Land each in its own commit if the feature is non-trivial.
+
+## When fixing a bug
+
+Identify which layer the bug lives in and fix it there. If the bug crosses layers, that's a smell — flag it.

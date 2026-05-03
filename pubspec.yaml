@@ -14,6 +14,10 @@ dependencies:
   supabase_flutter: ^2.5.0
   google_sign_in: ^6.2.1
   flutter_facebook_auth: ^6.0.4
+  # Sign in with Apple is mandatory if any other social login is offered
+  # (App Store guideline 4.8). The Dart-side scaffolding is in place; iOS
+  # native capability + Apple Service ID setup is tracked in FOLLOWUPS.md.
+  sign_in_with_apple: ^6.1.0
 
   # State Management
   flutter_riverpod: ^2.5.1
@@ -28,6 +32,7 @@ dependencies:
   flutter_svg: ^2.0.10
   cached_network_image: ^3.3.1
   image_picker: ^1.0.7
+  image: ^4.1.7
 
   # Utilities
   uuid: ^4.3.3
@@ -35,12 +40,21 @@ dependencies:
   shared_preferences: ^2.2.2
   connectivity_plus: ^5.0.2
   permission_handler: ^11.3.0
+  flutter_dotenv: ^5.1.0
+  url_launcher: ^6.2.5
 
   # Icons
   cupertino_icons: ^1.0.6
   flutter_map: ^8.3.0
+  # Renders MapTiler vector tiles on top of flutter_map. Pinned to the 9.x beta
+  # because that's the line compatible with flutter_map 8.x (8.0.0 only supports
+  # flutter_map ^7, and 10.x requires flutter_gpu / Flutter main channel).
+  vector_map_tiles: ^9.0.0-beta.8
   latlong2: ^0.9.1
-  google_fonts: ^6.3.0
+  google_fonts: ^6.3.2
+  webview_flutter: ^4.13.1
+  h3_flutter: ^0.6.6
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -54,3 +68,9 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/logo/
+    # Environment files. Real values are loaded from whichever file matches
+    # --dart-define=FLAVOR=<dev|staging|prod>. Keep .env.example committed as a
+    # template; .env.dev / .env.staging / .env.prod are gitignored.
+    - .env.example
+    - .env.dev
+    - .env.staging

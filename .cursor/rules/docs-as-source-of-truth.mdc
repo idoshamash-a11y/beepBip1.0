@@ -1,0 +1,34 @@
+---
+description: BEEPBIP docs are the canonical source of truth — read before substantive work, append deferred items there (never "I'll keep it in our chat to-do list")
+alwaysApply: true
+---
+
+# Docs are the source of truth
+
+Before any substantive planning, design, or feature work, you MUST read the relevant doc(s):
+
+| If the user asks about… | Read first |
+|---|---|
+| Product scope, schema, business rules, pricing, launch plan | `docs/MVP_SPEC.md` |
+| App layer rules (Presentation / Application / Domain / Data / Core) | `docs/ARCHITECTURE.md` |
+| Open decisions, deferred items, blockers | `docs/FOLLOWUPS.md` |
+| Where we are right now, what's broken, what's verified | `docs/STATE.md` |
+| How chats are organized | `docs/AGENTS.md` |
+
+If `docs/MVP_SPEC.md` and code disagree, **the spec wins** until the spec is updated.
+
+## Deferred items go in a file, not in chat memory
+
+When the user says *"keep this for later"*, *"add to to-do list"*, *"future improvement"*, or you identify something out of scope:
+
+- **DO** append a new bullet to the appropriate section of `docs/FOLLOWUPS.md` with the right priority emoji (🔴 🟠 🟡 🟢 ⚪).
+- **DO NOT** say "I'll keep it in our future to-do list" without writing the file.
+- **DO** confirm the write to the user with the file path and new bullet.
+
+## When you discover state changes
+
+If something becomes verified-working or newly broken during a session, update `docs/STATE.md`. Don't let the doc drift behind reality.
+
+## When the spec needs to change
+
+If you propose a change to product scope, schema, or layer rules, edit `docs/MVP_SPEC.md` (or `ARCHITECTURE.md`) in the same turn. Never let agreed-upon decisions live only in chat history.

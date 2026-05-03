@@ -55,48 +55,49 @@ class _ProfileTypeSelectionScreenState
               ),
               const SizedBox(height: 48),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _ProfileTypeCard(
-                      icon: Icons.person,
-                      title: 'Personal Profile',
-                      description:
-                          'Connect with people around you. Share your interests and discover others nearby.',
-                      features: const [
-                        'Free & Premium tiers',
-                        'Share interests & hobbies',
-                        'Control privacy settings',
-                        'Meet new people',
-                      ],
-                      isSelected: _selectedType == ProfileType.personal,
-                      onTap: () {
-                        setState(() {
-                          _selectedType = ProfileType.personal;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    _ProfileTypeCard(
-                      icon: Icons.business,
-                      title: 'Business Profile',
-                      description:
-                          'Promote your business and reach customers in your area. Premium only.',
-                      features: const [
-                        'Premium tier required',
-                        'Multiple locations',
-                        'Business hours & services',
-                        'Reach local customers',
-                      ],
-                      isSelected: _selectedType == ProfileType.business,
-                      onTap: () {
-                        setState(() {
-                          _selectedType = ProfileType.business;
-                        });
-                      },
-                      isPremiumOnly: true,
-                    ),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _ProfileTypeCard(
+                        icon: Icons.person,
+                        title: 'Personal Profile',
+                        description:
+                            'Connect with people around you. Share your interests and discover others nearby.',
+                        features: const [
+                          'Free & Premium tiers',
+                          'Share interests & hobbies',
+                          'Control privacy settings',
+                          'Meet new people',
+                        ],
+                        isSelected: _selectedType == ProfileType.personal,
+                        onTap: () {
+                          setState(() {
+                            _selectedType = ProfileType.personal;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      _ProfileTypeCard(
+                        icon: Icons.business,
+                        title: 'Business Profile',
+                        description:
+                            'Promote your business and reach customers in your area. Premium only.',
+                        features: const [
+                          'Premium tier required',
+                          'Multiple locations',
+                          'Business hours & services',
+                          'Reach local customers',
+                        ],
+                        isSelected: _selectedType == ProfileType.business,
+                        onTap: () {
+                          setState(() {
+                            _selectedType = ProfileType.business;
+                          });
+                        },
+                        isPremiumOnly: true,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -139,7 +140,7 @@ class _ProfileTypeCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.1)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
               : Colors.transparent,
           border: Border.all(
             color: isSelected

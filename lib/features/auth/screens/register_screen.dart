@@ -77,6 +77,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  Future<void> _handleAppleLogin() async {
+    final success = await ref.read(authControllerProvider.notifier).signInWithApple();
+
+    if (!mounted) return;
+
+    if (success) {
+      context.go('/profile-type');
+    } else {
+      final error = ref.read(authControllerProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error ?? 'Apple login failed')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
@@ -203,17 +218,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       : const Text('Sign Up'),
                 ),
                 const SizedBox(height: 16),
-                Row(
+                const Row(
                   children: [
                     Expanded(child: Divider()),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 16),
                       child: Text('OR', style: TextStyle(color: Colors.grey)),
                     ),
                     Expanded(child: Divider()),
                   ],
                 ),
                 const SizedBox(height: 16),
+                SocialLoginButton(
+                  icon: Icons.apple,
+                  label: 'Continue with Apple',
+                  onPressed: authState.isLoading ? null : _handleAppleLogin,
+                  backgroundColor: Colors.black,
+                  textColor: Colors.white,
+                ),
+                const SizedBox(height: 12),
                 SocialLoginButton(
                   icon: Icons.g_mobiledata,
                   label: 'Continue with Google',
@@ -233,7 +256,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Already have an account? '),
+                    const Text('Already have an account? '),
                     TextButton(
                       onPressed: () => context.go('/login'),
                       child: const Text('Sign In'),

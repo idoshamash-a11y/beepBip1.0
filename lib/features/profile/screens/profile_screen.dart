@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/theme_provider.dart';
+import '../../listings/providers/listings_providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -200,6 +203,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           ),
                         ],
                       ),
+                      // Business owners get a quick way to jump to their public
+                      // page from here. Personal-only users don't see this row.
+                      Builder(builder: (innerContext) {
+                        final business =
+                            ref.watch(currentBusinessProfileProvider);
+                        if (business == null) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: _ActionButton(
+                            label: 'View my business page',
+                            icon: Icons.storefront_outlined,
+                            primary: false,
+                            bgColor: c.bg,
+                            borderColor: c.border,
+                            onTap: () => innerContext
+                                .push('/business/${business.id}'),
+                          ),
+                        );
+                      }),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -321,6 +343,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ),
                 ),
               ),
+
+              // Dev tools — only present in debug builds. Gives the team a
+              // one-tap path to populate or wipe mockup accounts so the
+              // feed/map/listings screens have realistic data to show.
+              if (kDebugMode) ...[
+                const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GestureDetector(
+                      onTap: () => context.push('/dev/mockups'),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: c.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: const Icon(
+                                Icons.science_outlined,
+                                color: AppColors.accent,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Dev · Mockup accounts',
+                                    style: GoogleFonts.outfit(
+                                      color: c.textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Load, clear, or reload demo personal & business accounts.',
+                                    style: GoogleFonts.outfit(
+                                      color: c.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios_rounded,
+                                color: c.textSecondary, size: 13),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
