@@ -2,7 +2,7 @@
 
 > **Purpose:** The one file every new agent reads first. ≤50 lines. Keep it tight.
 > **Update rule:** Whenever something becomes verified-working or newly broken, edit this file in the same turn.
-> **Last updated:** 2026-05-02 (Community + Agent Architecture ratified — `MVP_SPEC.md` extended with §3.12 agent, §3.13 communities, §3.14 browseable tier, §4.7 agent runtime, §5.5–§5.7 schema deltas, Phases 7+8. `FOLLOWUPS.md` extended with §1.8, §2.9, §4.3. Open Qs for founder: D-AGENT-4, D-NBHD-1/2, D-B2B-1, D-CHIP-1. New investor-facing narrative at `docs/AGENT_NARRATIVE.md`. Phase 7+8 are post-SoHo-launch; do not interleave with Phases 0–6 work.).
+> **Last updated:** 2026-05-04 (co-founder review pass — `MVP_SPEC.md` extended with §3.1.a GMB connect, §3.1.b social-data-pull, §3.3 globe map + POI overlay, §3.14a brand color system, §3.15 favorites/wishlist, §4.7a map runtime, §5.7a category taxonomy + GMB sync, §5.7b favorites schema. Phase 0 gains MapLibre globe spike + brand tokens, Phase 1 splits onboarding into GMB + social-pull tracks, Phase 2 adds favorites + POI overlay. `FOLLOWUPS.md` adds §1.9. Resolved: D-NBHD-1 (5 browseable nbhds), D-APPLE-DEV (Shai owns), D-COLOR-1. Open: D-MAP-1, D-GMB-1, D-SOCIAL-1, D-FAV-1, plus prior D-AGENT-4, D-NBHD-2, D-B2B-1, D-CHIP-1. New shareable doc: `docs/CO_FOUNDER_BRIEF.md`.).
 
 ---
 

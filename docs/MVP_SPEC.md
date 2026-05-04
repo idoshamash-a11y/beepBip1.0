@@ -2,7 +2,7 @@
 
 > **Status:** Canonical source of truth for MVP build.
 > **Owners:** 3 co-founders.
-> **Last updated:** 2026-05-02 (Community + Agent Architecture ratified — added §3.12 Discovery agent, §3.13 Communities, §4.7 Agent architecture, §5.5–§5.7 schema deltas for B2B/B2C audience + agent + browseable tier, §10 Phase 7 + 8, §12 new D-AGENT/NBHD/B2B/COMM/CHIP rows. Existing SoHo POC scope unchanged; agent + browseable tier ship as a follow-on phase, not as V1 blockers.).
+> **Last updated:** 2026-05-04 (co-founder review pass — added §3.1.a Google Business Profile connect for business onboarding, §3.1.b social-data-pull for personal onboarding, §3.3 Globe-first map + POI overlay, §3.14a Brand color system, §3.15 Favorites & wishlists, §4.7a Map/globe runtime, §5.7a Category taxonomy + GMB sync schema, §5.7b Favorites schema, §5.8 agent favorites tools. Build plan §10 Phase 0 gains MapLibre globe spike + brand color tokens + POI overlay, Phase 1 splits onboarding into GMB + social-pull tracks, Phase 2 adds favorites. §12 resolves D-NBHD-1 to the 5-neighborhood set (Williamsburg / West Village / LES / Nolita / NoHo); resolves D-APPLE-DEV (Shai owns Apple Developer enrollment); adds D-MAP-1 / D-GMB-1 / D-SOCIAL-1 / D-FAV-1.).
 > **Launch target:** SoHo, Manhattan (New York, USA) — single-neighborhood POC, then a 4–5 neighborhood "browseable tier" via the agent + waitlist (see §3.14).
 > **Scope horizon:** 6–8 weeks from foundation fixes to public SoHo launch (Phases 0–6). Agent + browseable tier ship as Phase 7–8 immediately after, behind feature flags.
 
@@ -112,12 +112,59 @@ Everything below ships before public launch. Anything not listed ships later.
 - Serial ID `BP-XXXXXX` kept from current schema.
 - Minimal onboarding: phone → interests (personal) or business category + address (business). **Full profile setup deferred until after first meaningful action** (booking as consumer, first listing as business).
 
+#### 3.1.a Business onboarding — Google My Business connect (V1)
+
+The business onboarding flow opens with a **"Connect your Google Business Profile"** step (formerly Google My Business). This is the fastest path from "I tap Sign Up" to "my page is live and credible."
+
+- **OAuth scope:** `https://www.googleapis.com/auth/business.manage` via Google Identity. The user signs in with the Google account that owns their listing; we never ask for a password.
+- **What we pull, with explicit on-screen consent (one toggle per field group, all default ON):**
+  - Business name, primary category, address, phone, website
+  - Business hours (7-day) → maps directly to `business_hours`
+  - Up to 10 photos (cover + gallery) → uploaded to our Storage and copied, not hot-linked
+  - Public review summary as **read-only social proof** (e.g. "4.6★ on Google · 312 reviews"). We do **not** import the reviews themselves; our 3-tier feedback (§3.6) is our trust system.
+  - Verified-owner status → grants the user a stronger candidate profile in our verification queue (§3.6) but never auto-grants the BeepBip Verified Business badge.
+- **No GMB account?** The user falls through to the existing manual flow (category + address + hours). GMB connect is recommended, never required.
+- **Category → curated hashtag + services menu.** Once we know the GMB primary category (e.g. `Bakery`, `Massage Therapist`, `Art Gallery`), the next step in onboarding **only surfaces hashtags and services relevant to that category** — not the entire universe. The mapping lives in `category_taxonomy` (see §5.7a) and is curated, not learned. A bakery sees `#sourdough`, `#gluten_free`, `#wholesale_pastry`, `#wedding_cakes`; not `#tattoo_artist`. The user can still reach the "Show all" view if they want to add an off-category tag, but the default is the curated set. This is what keeps a business's hashtags coherent and what makes the agent's `find_provider`/`find_materials` answers actually trustworthy.
+- **Hash + service drift control.** Owners can mark a category as a secondary category (e.g. a café that also runs pastry classes); each secondary category contributes its hashtag/service pool. Cap of 2 secondary categories to keep the surface honest.
+- **Re-sync hooks.** A `business_profiles.gmb_resource_name` and `gmb_last_synced_at` let us refresh hours / photos on a nightly job. The owner can disconnect at any time → we keep what we already imported (it's their data) but stop refreshing.
+- **Why this matters strategically.** GMB connect is also our cleanest way to *match* a SoHo business to a row in the browseable tier (§3.14). If the business already exists as `imported` from Google Places, GMB connect is the canonical way to claim it without an out-of-band one-time code: same Google entity ⇒ instant claim.
+
+#### 3.1.b Personal onboarding — social media data pull (V1, opt-in)
+
+Personal onboarding offers (does not require) **"Connect your social accounts to skip the empty-profile feeling."** Each provider is a separate consent step with a clear, plain-language list of what we'll pull.
+
+- **Providers in V1:** Apple, Google, Facebook (already wired). Instagram via the Facebook Business Login path is V1.5; TikTok is V1.5 (D9). Apple's "hide my email" → no social data, just identity.
+- **Two distinct user actions, separately consented:**
+  1. **Sign in with X** — identity only (auth + serial ID assignment). No data pulled beyond name + email.
+  2. **Connect X to your BeepBip profile** — opt-in, data-pull step that runs *after* identity is established. Each field shown as a toggle that the user can leave off.
+- **What we pull, per provider (consent-toggled, none default ON for V1; we err strict):**
+  - **Profile photo + display name** (one-tap copy into BeepBip).
+  - **Public bio / description** (suggested as the BeepBip bio; user can edit).
+  - **Self-declared interests / followed pages / liked categories** → mapped to our `interests` taxonomy via the same `category_taxonomy` table (§5.7a). User reviews the suggested interests before they save. Nothing is stored without an explicit "Save" tap.
+  - **Public handle** (e.g. `@dana.in.soho`) → stored in `personal_profiles.social_handles` JSONB and surfaced as a clickable chip on the profile (already in spec).
+  - **Recent public posts (last ~30 days, max 9)** → suggested as starter items for the BeepBip *feed*: each one shown as a card the user **explicitly checks** to import as a `posts` row. Anything they don't check is dropped. We never auto-publish.
+  - **No friend graph, no contact list, no DMs, no location history.** Hard rule. These are off-limits in V1 regardless of what the provider offers.
+- **Permission UI rules (non-negotiable):**
+  - Plain-language list of fields *before* the OAuth redirect ("BeepBip will see your name, photo, public posts, and follows. We will not see your DMs, friends, or location history.").
+  - Every field has its own toggle on the post-OAuth review screen.
+  - Disconnect at any time → revokes the token; previously-imported data stays unless the user taps "Erase imported data" (one-button nuke).
+  - Privacy policy section dedicated to social import describing exactly what we touch and what we don't.
+- **Why this matters strategically.** A pre-populated profile + a feed that already has 3-5 cards in it is the difference between an empty-shell first session and a "this app already knows me" first session. It also gives the agent (§3.12) something to ground `find_similar_people` on from minute one, instead of waiting for the user to author content.
+
+> **Privacy posture for §3.1.a + §3.1.b:** every connector is opt-in. Default-on toggles only exist where a reasonable user would feel surprise if the data *weren't* used (e.g. importing your own GMB hours into your own business hours). User-private fields (DMs, contacts, location history) are out of scope, period. See `FOLLOWUPS.md` §1.6 for the privacy-policy work this implies.
+
 ### 3.2 Profiles
 - **Personal profile:** display name, photo, bio, interests (tags), optional neighborhoods, visibility toggle (open/closed), location-sharing tri-state.
 - **Business profile:** business name, logo, cover image, category, description, SoHo address (must fall inside SoHo polygon for V1), hours (7-day), services, photo gallery, founding-business badge (first 100).
 
 ### 3.3 Discovery
-- **Map view** (flutter_map + MapTiler) with neighborhood polygon overlay, clustered pins by category, tap-to-preview card.
+- **Map view (Globe-first projection).** The map opens as a **3D globe** (Mercator falls back automatically below zoom ~3 if device GPU/perf can't sustain globe). The globe is the brand-defining "you live in a city in a world" framing — when you spin out, you see Earth; when you fly in, you land in your neighborhood polygon with our pins on top of it. Implementation: **MapLibre GL Native** (via `maplibre_gl` Flutter plugin) using **MapTiler** vector tiles in globe projection; `flutter_map` is retained as the fallback raster path for older devices. (See §4.7a for the cost & device-support matrix and the rationale for not switching to Mapbox or Google Maps.)
+- **What sits on the globe / map:**
+  - **Active neighborhood polygon** outlined and softly tinted (live = brand color; browseable = muted border).
+  - **BeepBip pins** — clustered by category, colored by listing type (service / item / event), tap → preview card.
+  - **Points of interest in the neighborhood** — parks, transit, landmarks, cultural venues, public toilets etc. Sourced from MapTiler's base style + an OpenStreetMap (Overpass) overlay for the neighborhood polygon. POIs render in a desaturated style so BeepBip pins always read as primary. Filter chips along the bottom (`Coffee · Parks · Transit · Galleries · Public bathrooms · …`) toggle which POI categories show. Tapping a POI shows a lightweight info card with the public name + category + a "Get directions" link; no commerce surface (POIs are context, not inventory).
+  - **Browseable-tier neighborhoods** show their polygons + a stylized "Browseable — tap to preview" affordance when the camera flies over them.
+  - **Favorites overlay** (see §3.15) — toggleable; renders the user's favorited businesses, listings, and saved places as a distinct pin style.
 - **List view** of businesses with filters: category, distance, rating, open-now, price range, **hashtag**.
 - **Search** with typo tolerance (Postgres `pg_trgm`), scoped to SoHo by default. Supports plain text, `#hashtag`, and `@business` syntaxes.
 - **Hashtag search & filter** — tapping `#handmade` on any listing opens a filtered results view of all listings with that tag in the current neighborhood. See §3.11.
@@ -268,16 +315,64 @@ The serial id `BP-XXXXXX` is a **graph node**, not a watermark. Edges (interests
 - "From your communities" feed slot above the SoHo digest.
 - The agent's mining pipeline output (`community_mining_candidates`) is human-reviewed before promotion. Names default to the dominant hashtag set; humans refine.
 
+### 3.14a Brand color system (V1 source of truth)
+
+The brand is built around a **warm-amber-on-vantablack** identity. Three colors do all the heavy lifting; everything else is a tint or shade of these. The values below are normative — `lib/core/theme/app_theme.dart` is the implementation.
+
+| Role | Hex | Where it shows |
+|---|---|---|
+| **Primary — Amber** | `#FF9800` | Buttons, CTAs, active map pins, agent send button, "Ask BeepBip…" cursor, hashtag chips on hover |
+| **Accent — Light Amber** | `#FFB74D` | Hovers, secondary chips, gradient highlights |
+| **Secondary — Near Black** | `#1A1A1A` | Headlines on light surfaces, dark icon strokes |
+| **Surface (dark, default) — Vantablack Base** | `#050505` | Main scaffold bg in dark mode (default theme) |
+| **Surface (dark, raised) — Deep Core** | `#0F0F11` | Cards, sheets, dialogs in dark mode |
+| **Surface (light) — Off White** | `#F8F9FA` | Light-mode scaffold bg |
+| **Text on dark** | `#FFFFFF` (primary), `#A0A0A0` (secondary) | All dark-mode body copy |
+| **Text on light** | `#1A1A1A` (primary), `#6B6B6B` (secondary) | All light-mode body copy |
+| **Success** | `#34C759` | Booking confirmed, payment succeeded |
+| **Warning** | `#FFCC00` | Pending review, soft moderation states |
+| **Error** | `#FF3B30` | Card declines, validation errors, dispute opened |
+
+**Typography:** `Plus Jakarta Sans` via `google_fonts` (Display/Headline/Body all use the same family with weight differences).
+
+**Theming rules:**
+- Dark mode is the **default**. Light mode is supported but not the brand-forward state.
+- Brand color is **never** used as a flat background — only as ink/CTA/accent. Backgrounds are vantablack, near-black, or off-white.
+- Map pins and chip backgrounds are the only places where amber gets a fill; elsewhere it's a stroke or a glow.
+- Founders' iconography & app icon will be commissioned (designer brief — see `FOLLOWUPS.md` §2.2) but must remain compatible with this palette; no reroll.
+
+### 3.15 Favorites & wishlists (V1)
+
+> **Why this matters.** Users want to save things — "I want to come back to this gallery", "I'm thinking about booking that massage next month", "this person looks interesting." Without a save action, every session restarts from zero. With it, the app accumulates *value over time per user*, which is the only way to beat Yelp's "I bookmark on Google Maps anyway" inertia.
+
+The model is **one favorite primitive, four target types, two views**:
+
+- **Target types:** `business_profile`, `listing`, `post`, `place` (a POI from the map overlay — §3.3 — that the user wants to remember). A future `person` target is gated behind privacy work and is V2.
+- **Two views the user sees:**
+  1. **Saved places** — a layer on the **map / globe**. Toggleable like any other map filter. Renders pins for favorited businesses, listings (where a location can be derived), and POIs.
+  2. **Wishlists** — a tab on the **profile screen**, grouped by target type ("Businesses", "Listings", "Posts", "Places"). Sort by date saved or last visited.
+- **One-tap heart on every relevant card** — `BusinessCard`, `ListingCard`, `PostCard`, `PlaceCard`. The same heart appears in the agent's RichCards (§3.12), so if the agent surfaces a good answer the user can keep it without leaving the chat sheet.
+- **Public vs private:**
+  - All favorites are **private by default**.
+  - V1 ships private only.
+  - V1.5 adds an opt-in "Public wishlist" mode (e.g. "Things I love in SoHo") that becomes part of the social surface — useful for tastemaker accounts and for the agent's `find_similar_people` overlap signal.
+- **Agent integration:** `propose_card_for_save` is not a tool the agent calls; saving stays a user action. But the agent reads the user's favorites (with consent) as a strong signal in `find_similar_people` and `suggest_communities` once V1.5 communities ship. The "you and `BP-XYZ` share…" overlap sheet (§7) gains a "shared favorites" row when both users have favorited the same thing.
+- **Cold-start tie-in:** the social-data-pull step (§3.1.b) can pre-seed `favorites` with up to 5 places the user explicitly checks (e.g. places they tagged in their last 30 days of public posts). Strict opt-in. This is what turns "empty wishlist tab" into "5 places I already love" on day one.
+
+Schema lives in §5.7b. UI surfaces touched: every card site, profile screen, map screen.
+
 ### 3.14 Browseable-tier neighborhoods (Phase 8, V1)
 
 The agent is only as useful as its range. Restricting it to SoHo would limit it to "what's in 0.5 sq mi"; a multi-neighborhood agent answers "compare SoHo and Williamsburg for indie coffee" or "I want to move for the food scene — where?". But going *live* in 5 neighborhoods at once breaks the depth-before-breadth GTM rule.
 
-The compromise: **two tiers of neighborhood**.
+The compromise: **two tiers of neighborhood**. **MVP locks to exactly 5 browseable neighborhoods + 1 Live neighborhood (SoHo).**
 
 | Tier | What exists | What works | Why |
 |---|---|---|---|
 | **Live** (SoHo) | Real verified businesses, real users, real listings | Transactions, escrow, feedback, full agent capability | The depth play; existing §2 |
-| **Browseable** (Williamsburg, West Village, Lower East Side, Nolita, NoHo — D-NBHD-1 pending founder confirmation) | Imported businesses from public data (Google Places + Yelp Fusion + NYC OpenData — D-NBHD-2 pending counsel review) | Read-only descriptions, "Claim this business" CTA, neighborhood-level waitlist | Gives the agent real range without 5x door-to-door cost; generates demand signal for next launch |
+| **Browseable — exactly 5** (Williamsburg, West Village, Lower East Side, Nolita, NoHo) | Imported businesses from public data (Google Places + Yelp Fusion + NYC OpenData — D-NBHD-2 pending counsel review) | Read-only descriptions, "Claim this business" CTA, neighborhood-level waitlist | Gives the agent real range without 5x door-to-door cost; generates demand signal for next launch |
+
+**D-NBHD-1 resolved** (founder decision, 2026-05-04): the 5 browseable neighborhoods at MVP launch are **Williamsburg, West Village, Lower East Side, Nolita, NoHo**. Polygon work and importer scope are bound to this set; any change requires explicit re-ratification.
 
 **Rules:**
 - Every imported business is **visibly badged** in every UI surface as "Unclaimed listing — public info." Violating this is a trust-killer.
@@ -489,6 +584,34 @@ All repositories return `Future<Result<T, Failure>>` (via `fpdart` or an in-hous
 - **Budget exhaustion**: same fallback path; user sees a friendly notice "You're at your daily message limit — Business Pro removes this."
 - **Tool timeout (>3 s for any single tool)**: returns a partial card list; agent informs the user. Logged in `agent_traces.timeouts`.
 - **Tool error**: structured error returned to the agent; agent must surface it user-friendly (system-prompt rule), never invent.
+
+### 4.7a Map / globe runtime architecture
+
+The map is the most interactive surface in the app. We've moved it from a flat 2D Mercator (per the original `flutter_map` plan) to a **3D globe with a Mercator fallback** (§3.3) for brand and storytelling reasons. That decision has cost and engineering implications, captured here so it isn't forgotten when implementation starts.
+
+**Stack:**
+
+| Layer | Choice | Why |
+|---|---|---|
+| Tile source | **MapTiler** vector tiles (`streets-v2`, `dataviz-dark`) | Free up to 100k loads/mo; a globe-compatible style; we already chose them for cost reasons |
+| Renderer (primary, V1) | **`maplibre_gl` Flutter plugin** with globe projection enabled | Open-source MapLibre Native; supports globe; works with any vendor's vector tiles |
+| Renderer (fallback, V1) | **`flutter_map`** raster (existing path) | Older devices / web preview / extreme low-power mode |
+| Geocoding | **Nominatim** (self-hostable) for reverse geocoding; MapTiler geocoding API for forward | Avoid Google Geocoding ($5/1k) entirely |
+| POI overlay | OpenStreetMap (Overpass API) for the neighborhood polygon, cached nightly into a `pois` table | Free, accurate enough for "where's the nearest park" framing |
+| User location | `geolocator` (already in pubspec) | No change |
+
+**Why not Mapbox / Google Maps for the globe:** Mapbox supports globe natively and looks great, but the SDK price ramps after 25k MAU and the Flutter SDK is officially maintained but lower-velocity than MapLibre. Google Maps remains rejected on cost (§6). MapLibre + MapTiler keeps us inside our cost ceiling and ships a globe.
+
+**Device support floor:** globe projection requires WebGL2-equivalent on the device GPU. iPhone 8+ and Android devices on Vulkan/OpenGL ES 3.0+ are fine (~98% of the iOS install base, ~85% Android). Below that we silently downgrade to flat MapLibre, then to `flutter_map` raster.
+
+**Performance budget:** first paint of the globe < 1.5 s on iPhone 12; 60 fps on idle pan/zoom; battery target < 5%/min in active use. Telemetry tracks fps via `AutomatedPerfTracker` (existing PostHog hook).
+
+**POI overlay rules:**
+- Up to ~100 POI rendered at a time, clustered above 1km zoom-out radius.
+- Distinct visual language from BeepBip pins: smaller, desaturated, no border, opens a lightweight InfoCard (not a `BusinessCard`).
+- Source attribution: "Map data © OpenStreetMap contributors, © MapTiler" on the legal page and in a tiny ⓘ corner of the map.
+
+**Open questions captured for `FOLLOWUPS.md`:** MapTiler globe-style billing model, MapLibre Flutter plugin maturity for our supported iOS/Android matrix, whether the POI nightly job lives next to `refresh_browseable_businesses` or as its own Edge Function.
 
 ---
 
@@ -971,6 +1094,124 @@ CREATE INDEX idx_waitlist_neighborhood ON public.neighborhood_waitlist(neighborh
 
 **RLS:** every UI surface that renders an `imported` business badge it visibly as "Unclaimed listing — public info." Enforced in render code (no DB-level enforcement of UI badging — but `business_profiles.source` is exposed in every read so the client can't claim ignorance).
 
+### 5.7a Category taxonomy + GMB sync schema
+
+```sql
+-- Curated mapping from a category (GMB or our own taxonomy) to the hashtags / services
+-- the onboarding flow should surface for that business. Editable via the admin panel.
+CREATE TABLE public.category_taxonomy (
+  category_key   TEXT PRIMARY KEY,             -- e.g. 'bakery', 'massage_therapist'
+  display_name   TEXT NOT NULL,
+  parent_key     TEXT REFERENCES public.category_taxonomy(category_key),
+  audience       listing_audience NOT NULL DEFAULT 'consumer',
+  hashtags       TEXT[] NOT NULL DEFAULT '{}', -- recommended starter hashtags
+  services       TEXT[] NOT NULL DEFAULT '{}', -- recommended service names
+  interests      TEXT[] NOT NULL DEFAULT '{}', -- mapped personal-side interests
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_category_taxonomy_parent ON public.category_taxonomy(parent_key);
+
+-- Crosswalk from external provider categories (Google, Yelp, Instagram) to our keys.
+CREATE TABLE public.category_aliases (
+  provider       TEXT NOT NULL,                -- 'google_places' | 'yelp' | 'instagram'
+  external_key   TEXT NOT NULL,                -- e.g. 'gcid:bakery'
+  category_key   TEXT NOT NULL REFERENCES public.category_taxonomy(category_key),
+  PRIMARY KEY (provider, external_key)
+);
+
+-- GMB connection per business profile.
+ALTER TABLE public.business_profiles
+  ADD COLUMN gmb_resource_name        TEXT,        -- e.g. 'accounts/123/locations/456'
+  ADD COLUMN gmb_place_id             TEXT,        -- the Google Places id (used to match imported rows)
+  ADD COLUMN gmb_primary_category_key TEXT REFERENCES public.category_taxonomy(category_key),
+  ADD COLUMN gmb_secondary_categories TEXT[] NOT NULL DEFAULT '{}', -- max 2 enforced in app
+  ADD COLUMN gmb_last_synced_at       TIMESTAMPTZ,
+  ADD COLUMN gmb_sync_error           TEXT;        -- last error message, NULL on healthy
+
+-- When a `business_profiles.source='imported'` row is later claimed via GMB,
+-- the row is updated in place: source -> 'claimed', gmb_* fields populated, claim_token cleared.
+
+-- Personal-profile social-data-pull state (V1, opt-in per provider per field).
+CREATE TABLE public.social_connections (
+  user_id      UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  provider     TEXT NOT NULL,                  -- 'apple' | 'google' | 'facebook' | 'instagram' | 'tiktok'
+  external_id  TEXT NOT NULL,                  -- the provider's stable user id
+  scopes       TEXT[] NOT NULL DEFAULT '{}',   -- granted scopes, mirror what we asked for
+  consent      JSONB NOT NULL DEFAULT '{}',    -- { profile_photo:true, bio:false, interests:true, ... }
+  last_pulled_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+
+-- A staging table the user reviews before import; rows survive only until accepted/rejected.
+CREATE TABLE public.social_import_candidates (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id       UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  provider      TEXT NOT NULL,
+  kind          TEXT NOT NULL,                 -- 'interest' | 'post' | 'photo' | 'handle'
+  payload       JSONB NOT NULL,                -- the raw candidate (e.g. text, image url, tag)
+  decision      TEXT,                          -- NULL | 'accepted' | 'rejected'
+  decided_at    TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_social_import_pending ON public.social_import_candidates(user_id) WHERE decision IS NULL;
+```
+
+**RLS for §5.7a:**
+- `category_taxonomy`, `category_aliases` — public read; admin-only write.
+- `social_connections`, `social_import_candidates` — owner-only read/write. Service role inserts during the OAuth callback Edge Function. Rows older than 30 days with `decision IS NULL` are reaped nightly (the user lost interest; safer to forget than to keep stale candidates around).
+
+### 5.7b Favorites & wishlists schema
+
+```sql
+CREATE TYPE favorite_target_type AS ENUM (
+  'business_profile', 'listing', 'post', 'place'
+);
+
+CREATE TABLE public.favorites (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  target_type     favorite_target_type NOT NULL,
+  target_id       UUID,                              -- for business_profile / listing / post
+  place_payload   JSONB,                             -- for 'place' targets (POI from map): {name, lat, lng, source, source_id}
+  list_name       TEXT NOT NULL DEFAULT 'default',   -- user-named wishlists (e.g. "Date night", "SoHo coffee")
+  is_public       BOOLEAN NOT NULL DEFAULT FALSE,    -- V1 ships private only; V1.5 enables this toggle
+  note            TEXT,                              -- private note from the user
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  CHECK (
+    (target_type IN ('business_profile','listing','post') AND target_id IS NOT NULL AND place_payload IS NULL)
+    OR
+    (target_type = 'place' AND target_id IS NULL AND place_payload IS NOT NULL)
+  )
+);
+
+CREATE UNIQUE INDEX uniq_favorite_per_target
+  ON public.favorites(user_id, target_type, COALESCE(target_id::TEXT, place_payload->>'source_id'), list_name);
+CREATE INDEX idx_favorites_user_recent ON public.favorites(user_id, created_at DESC);
+CREATE INDEX idx_favorites_target ON public.favorites(target_type, target_id) WHERE target_id IS NOT NULL;
+
+-- Aggregate count for cards (eventually replace with a counter cache if write traffic warrants).
+CREATE VIEW public.favorite_counts AS
+SELECT target_type, target_id, COUNT(*)::INT AS n_favorites
+FROM public.favorites
+WHERE target_id IS NOT NULL
+GROUP BY target_type, target_id;
+```
+
+**RLS for §5.7b:**
+- `favorites` — owner-only read/write **except** for rows where `is_public = TRUE`, which any authenticated user can read. (V1 keeps `is_public` permanently FALSE via a CHECK at the app layer; V1.5 lifts the lock and adds the public-list UI.)
+- `favorite_counts` — public read, intentionally unauthenticated-friendly (used to render "12 saves" on a listing card without leaking *who* saved it).
+
+### 5.8 Discovery agent — favorites tool extension
+
+The agent's tool layer (§3.12) gains a read-only signal:
+
+- `read_user_favorites(my_serial, target_type?, list_name?)` — returns the user's own favorites for the agent to ground answers ("you usually save bakeries — here's a new one").
+- `get_overlap(serial_a, serial_b)` is extended to include `shared_favorites` in its return shape. RLS still applies: only `is_public = TRUE` favorites are visible cross-user.
+
+The agent never *writes* a favorite. Saving stays a deliberate user action with a heart tap.
+
 ---
 
 ## 6. Cost-aware stack decisions
@@ -981,7 +1222,8 @@ All cost figures are order-of-magnitude at MVP scale. The principle: **every $/M
 |---|---|---|---|---|
 | Mobile | Flutter + Riverpod | $0 | $0 | React Native — rejected b/c code already in Flutter |
 | Backend | Supabase Free → Pro | $0 → $25/mo | ~$100–300/mo | Self-hosted Postgres, Firebase |
-| Maps | **flutter_map + MapTiler** (free up to 100k loads/mo) | $0 | $25/mo | **Google Maps — rejected**, $10k+/mo at 100k MAU |
+| Maps | **MapLibre GL Native + MapTiler vector tiles** (globe primary, `flutter_map` raster fallback) | $0 | $25–50/mo | **Google Maps — rejected**, $10k+/mo at 100k MAU; **Mapbox SDK — rejected** at this stage on per-MAU SDK pricing |
+| POI overlay | **OpenStreetMap (Overpass)** cached nightly into `pois` | $0 | $0 (self-cached) | Google Places (used for browseable-tier import only — not the POI overlay) |
 | Geocoding | Nominatim (OSS) | $0 | $0 (self-hosted) | Google Geocoding $5/1k |
 | Images | Supabase Storage → **Cloudflare R2 + CDN** at 10k+ | $0 | $30–100/mo | Cloudinary (expensive at scale) |
 | Realtime | **Polling 30–60s** default; Supabase Realtime only for active chats | $0 | ~$50/mo | Always-on WebSockets ($500+/mo idle) |
@@ -999,7 +1241,7 @@ All cost figures are order-of-magnitude at MVP scale. The principle: **every $/M
 
 ### The traps we're consciously avoiding
 
-1. **Google Maps.** Already in `pubspec.yaml` as `google_maps_flutter: ^2.6.1`. This dep gets removed on Day 1. `flutter_map: ^8.3.0` stays.
+1. **Google Maps.** Already in `pubspec.yaml` as `google_maps_flutter: ^2.6.1`. This dep gets removed on Day 1. `flutter_map: ^8.3.0` stays as the raster-fallback path. **Globe rendering** ships via `maplibre_gl` (added as a new dep) using the same MapTiler tile source — see §4.7a for the full rationale.
 2. **Always-on Realtime.** Supabase Realtime bills per concurrent connection. For map discovery we poll; Realtime is only on open chat screens and for booking state transitions where the user is actively waiting.
 3. **Untiered LLM routing.** A naive "Sonnet for everything" deployment at 10k MAU averaging 3 chats/day at ~6k tokens each would burn ~$3–8k/mo. Tiered routing (Haiku for ~70% of intents, Sonnet only when needed) + Anthropic prompt caching (≥70% hit rate target) cuts this 5–10x. Per-user daily token budget is the hard backstop.
 4. **Naive vector storage.** Pinecone-style hosted vector DBs add a new vendor and a per-record fee. `pgvector` on the existing Supabase Postgres handles ≥1M vectors comfortably. Revisit only if recall regresses.
@@ -1130,6 +1372,7 @@ Once Phase 8 ships, the browseable tier (§3.14) becomes a continuous demand-dis
 
 **Add (client):**
 - `flutter_dotenv` — env files
+- `maplibre_gl` — globe-projection map renderer (MapTiler vector tiles, see §4.7a)
 - `riverpod_generator`, `riverpod_annotation`, `build_runner`, `custom_lint`, `riverpod_lint` — modern Riverpod
 - `freezed`, `freezed_annotation`, `json_serializable`, `json_annotation` — immutable models
 - `fpdart` (or a small in-house `Result` type) — functional error handling
@@ -1162,9 +1405,11 @@ Ordered list. Every item has a **Definition of Done (DoD)** to prevent half-ship
 | 1 | Fix A1–A5 critical bugs | App starts, real Supabase auth works, secrets not committed, `dev` flavor builds | 2 |
 | 2 | Add PostGIS to Supabase; migrate `locations.geog` | Nearby query using `ST_DWithin` returns real results in < 100ms | 0.5 |
 | 3 | Seed `neighborhoods` with SoHo polygon (GeoJSON from OpenStreetMap) | Map renders the polygon overlay on device | 0.5 |
-| 4 | Swap `google_maps_flutter` → `flutter_map` + MapTiler | Map loads; pins cluster; tap opens preview card | 2 |
+| 4 | Swap `google_maps_flutter` → MapLibre GL (`maplibre_gl`) + MapTiler vector tiles, **globe projection enabled** + `flutter_map` raster fallback | Globe loads in <1.5s on iPhone 12; pins cluster; tap opens preview card; raster fallback verified on iPhone 8 | 3 |
+| 4b | Brand color system enforced via `app_theme.dart` exports + `BrandColors` constants | Every screen imports brand colors from one place; design tokens shipped (D-COLOR-1) | 0.5 |
 | 5 | CI (GitHub Actions) on public fork | PRs run analyze + test + build automatically | 0.5 |
 | 6 | Crashlytics + PostHog wired (dev keys) | Crash in debug build surfaces in dashboards | 0.5 |
+| 6b | Spike: D-MAP-1 (`maplibre_gl` plugin maturity) — confirm globe projection works on our supported iOS/Android matrix | 1-page memo with go/no-go + fallback decision | 1 |
 
 ### Phase 1 — Identity & profiles (week 2)
 
@@ -1173,7 +1418,9 @@ Ordered list. Every item has a **Definition of Done (DoD)** to prevent half-ship
 | 7 | Migrate `auth` feature to clean architecture (template) | `auth/domain`, `auth/data`, `auth/presentation` with repos, typed failures, `AsyncNotifier` | 1.5 |
 | 8 | Phone + OTP onboarding (via Supabase phone auth) | New user can sign up with phone number end-to-end | 1 |
 | 9 | Sign in with Apple + Google | Both working on iOS sim + real device | 1 |
-| 10 | Business onboarding with SoHo address validation | Address must geocode inside SoHo polygon or flow blocks | 1 |
+| 10 | Business onboarding — **Google Business Profile (GMB) connect path** + manual fallback + SoHo polygon address validation (§3.1.a) | Owner who connects GMB lands on a pre-filled review screen; manual fallback still works; address geocodes inside SoHo polygon or flow blocks | 2 |
+| 10b | Category taxonomy seed + curated hashtag/services menu (§3.1.a, §5.7a) | `category_taxonomy` + `category_aliases` seeded with our top 20 SoHo categories; onboarding shows category-filtered hashtag/service chips | 1.5 |
+| 10c | Personal onboarding — **social-data-pull review screen** with per-field consent toggles (§3.1.b) | User can connect Apple/Google/Facebook → review pulled photo, bio, interests, public posts → tap-to-import; nothing imported without explicit consent | 2 |
 | 11 | Profile edit screens (personal + business) | All fields editable, photos upload, saved to Supabase Storage | 1.5 |
 
 ### Phase 2 — Listings & discovery (week 3)
@@ -1183,9 +1430,11 @@ Ordered list. Every item has a **Definition of Done (DoD)** to prevent half-ship
 | 12 | `listings` table + migration | Business can create service/item/event listings via admin-only tool | 0.5 |
 | 13 | Listing create/edit UI for businesses | Full CRUD with photo upload, preview | 2 |
 | 14 | `discover_listings` RPC + map pins | Map in SoHo shows real listings by category | 1 |
+| 14b | **POI overlay** on the map (§3.3) — Overpass importer + `pois` table + filter chips (Coffee / Parks / Transit / Galleries / Public bathrooms) | SoHo POIs render with desaturated styling; chips toggle layers; BeepBip pins visually dominant | 2 |
 | 15 | Search (full-text + filters + **hashtags**) | Typing "coffee" returns <200ms; `#handmade` returns only tagged listings; typo tolerance via `pg_trgm` | 2 |
 | 16 | Listing detail screen | Photos, description, price, **hashtag chips (tappable)**, book CTA, seller info, feedback summary | 1 |
 | 16b | Hashtag moderation infra | `banned_hashtags` + `muted_hashtags` tables seeded; admin UI to manage; client-side validation on listing create | 1 |
+| 16c | **Favorites/wishlist** (§3.15, §5.7b) — schema, heart on every card, profile "Wishlists" tab, "Saved places" map layer | Tap heart on listing/business/post/POI → row in `favorites`; profile tab shows grouped wishlists; map toggle shows saved-places overlay | 2 |
 
 ### Phase 3 — Transactions (weeks 4–5)
 
@@ -1299,11 +1548,16 @@ PR can't merge unless:
 | ~~D-AGENT-3~~ | Vector DB for agent memory | **RESOLVED — Supabase `pgvector`**. No new vendor; storage-dominated cost; pgvector handles ≥1M vectors comfortably. | A | (resolved) |
 | D-AGENT-4 | Free-tier daily message budget for the agent | Recommendation: 30 messages / 100k tokens per day (whichever first). Business Pro: unlimited with 1M-token/day abuse ceiling. Founder sign-off needed before agent enable. | Founders | Before Phase 7 ship |
 | ~~D-AGENT-5~~ | Agent multilingual support | **RESOLVED — V1 English-only**, Spanish + Simplified Chinese in V1.5. NYC needs both eventually but not at SoHo POC. | A | (resolved) |
-| D-NBHD-1 | Browseable-tier neighborhood set | Recommendation: Williamsburg, West Village, Lower East Side, Nolita, NoHo. Founder confirmation needed before importer or polygon work begins. | Founders | Before Phase 8 ship |
+| ~~D-NBHD-1~~ | Browseable-tier neighborhood set | **RESOLVED 2026-05-04 — Williamsburg, West Village, Lower East Side, Nolita, NoHo.** MVP locks to exactly 5 browseable + 1 Live. Polygon and importer work bound to this set. | Founders | (resolved) |
 | D-NBHD-2 | Public-data sources for browseable tier | Mix to validate with counsel: Google Places (paid, cached) + Yelp Fusion (free tier, attribution required) + NYC OpenData (free, official). Each needs a one-page ToS memo before import code ships. Budget: ~$1k legal. | A + counsel | Before Phase 8 ship |
 | D-B2B-1 | B2B payment path in V1 | Recommendation: V1 uses standard Stripe charges (same path as B2C); Stripe Invoices + net-terms is V2 (trigger: ≥10 B2B contracts/month at avg ticket >$200). Need CPA confirmation that "instant-pay" B2B contracts don't trip 1099/marketplace-facilitator quirks distinct from B2C. | A + CPA | Phase 7 schema work |
 | ~~D-COMM-1~~ | Community mining promotion threshold | **RESOLVED — ≥25 distinct users + ≥50 queries** over a rolling 30-day window scored against the same hashtag/interest cluster signature. Tunable; document in admin tool when V1.5 ships. | A | (resolved) |
 | D-CHIP-1 | Serial-ID chip default tap behavior | Recommendation: change default tap from "Copy" to "Open overlap sheet"; expose Copy as a button inside the sheet. Touches every chip render site (1 PR). Ship behind feature flag `chip.tap_opens_overlap`. Founder OK needed before flip. | Founders | Phase 7 ship |
+| D-MAP-1 | Globe map plugin selection | Recommendation: `maplibre_gl` Flutter plugin against MapTiler vector tiles (§4.7a). Spike on plugin maturity (active iOS+Android support, globe projection stability) before locking. If maturity is shaky, fallback path is `flutter_map` raster as primary with a "later" globe upgrade. | A | Phase 0 spike (1 day) |
+| D-GMB-1 | Google Business Profile API access | Requires a Google Cloud project + OAuth verification + restricted-scope review for `business.manage` (~2-4 weeks). Founder A applies; engineering can stub the integration in dev with a mock until verified. | A | Before Phase 1 ship |
+| D-SOCIAL-1 | Social-data-pull scope (Facebook + IG) | Confirm with Meta App Review which scopes (`user_posts`, `user_likes`, `instagram_basic`) we'll actually be granted at non-business consumer tier. Likely V1 ships with Apple/Google/Facebook profile-only fields and IG comes V1.5 with Business Login. | B | Phase 1 |
+| D-FAV-1 | Public wishlists timing | V1 ships private only. V1.5 lifts the lock and adds the public-list UI + agent surfacing. Confirm during V1 → V1.5 planning. | Founders | V1.5 planning |
+| D-APPLE-DEV | Apple Developer account ownership | **RESOLVED — Shai owns Apple Developer enrollment** ($99/yr) and is the named "account holder" on App Store Connect. D-U-N-S verification for the Florida LLC to be filed in Shai's name with the LLC as the legal entity. | Shai | Week 1 |
 
 ---
 

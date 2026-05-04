@@ -2,7 +2,7 @@
 
 > **Purpose:** One place to track every deferred decision, external dependency, and "check-on-this-later" item from `MVP_SPEC.md`.
 > **How to use:** Check items off as they're done. Add new items here (don't scatter them). Review every Monday.
-> **Last updated:** 2026-05-02 (Community + Agent Architecture design ratified — added §1.8 agent/community/browseable-tier blockers, §2.9 build-prep operational items, §4.3 V1.5 agent enhancements, §7 resolutions for D-AGENT-1/2/3/5 and D-COMM-1; flagged D-AGENT-4, D-NBHD-1/2, D-B2B-1, D-CHIP-1 for founder).
+> **Last updated:** 2026-05-04 (co-founder review pass — added §1.9 onboarding/map/favorites blockers (GMB connect, social-data-pull, globe map + POI overlay, brand color system, favorites/wishlist); resolved D-NBHD-1 (5 browseable neighborhoods locked) + D-APPLE-DEV (Shai owns Apple Developer enrollment) + D-COLOR-1 (brand palette); added new open decisions D-MAP-1, D-GMB-1, D-SOCIAL-1, D-FAV-1.).
 
 Legend: 🔴 blocks launch · 🟠 needed during build · 🟡 V1.5 · 🟢 V2+ / watch · ⚪ ongoing
 
@@ -42,14 +42,14 @@ Legend: 🔴 blocks launch · 🟠 needed during build · 🟡 V1.5 · 🟢 V2+ 
 - [ ] 🔴 **D5 — Verification rigor V1.** Manual review by C (free, slower, works at 50 businesses) vs. Stripe Identity ($1.50/verify, instant, works at scale). Recommendation: manual for first 100, switch to Stripe Identity once volume justifies.
 - [ ] 🔴 **D11 — Banned-hashtags seed list.** ~100-term initial list. Start from open-source [naughty-words](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words) + SoHo-specific additions (scam keywords, drug-related, controlled categories).
 - [ ] 🔴 **D-AGENT-4 — Agent free-tier daily message budget.** Recommendation: 30 messages/day OR 100k tokens/day (whichever first). Business Pro: unlimited with a 1M-token/day abuse ceiling. Founder sign-off needed before agent enable.
-- [ ] 🔴 **D-NBHD-1 — Browseable-tier neighborhood set.** Recommendation: Williamsburg, West Village, Lower East Side, Nolita, NoHo. Founder confirmation needed before importer or polygon work begins.
+- [x] ~~🔴 **D-NBHD-1 — Browseable-tier neighborhood set.**~~ **RESOLVED 2026-05-04 — Williamsburg, West Village, Lower East Side, Nolita, NoHo.** MVP locks to exactly 5 browseable + 1 Live (SoHo). Polygon and importer scope bound to this set; any change requires explicit re-ratification.
 - [ ] 🔴 **D-NBHD-2 — Public-data sources for browseable tier.** Mix to validate with counsel: Google Places (paid, cached) + Yelp Fusion (free tier, attribution required) + NYC OpenData (free, official). Each needs a one-page ToS memo before import code ships. Budget: ~$1k legal.
 - [ ] 🔴 **D-B2B-1 — B2B payment path in V1.** Recommendation: V1 uses standard Stripe charges (same path as B2C). Stripe Invoices + net-terms is V2. Need CPA confirmation that "instant-pay" B2B contracts don't trip any 1099/marketplace-facilitator quirks distinct from B2C.
 - [ ] 🔴 **D-CHIP-1 — Serial-ID chip default tap behavior.** Recommendation: change default tap from "Copy" to "Open overlap sheet"; expose Copy as a button inside the sheet. Change is small but touches every place a chip renders today. Ship behind feature flag `chip.tap_opens_overlap` so we can roll out the sheet first and flip behavior atomically. Founder OK needed before the flip.
 
 ### 1.4 App store & distribution
 
-- [ ] 🔴 **Apple Developer account** active ($99/yr). Required for: TestFlight (sharing test builds with co-founders), App Store submission, and Sign in with Apple.
+- [ ] 🔴 **Apple Developer account** active ($99/yr) — **owned by Shai.** Apple Developer enrollment is in Shai's name; the Florida LLC is the legal entity on record (D-U-N-S verified for the LLC). Shai is the named "account holder" on App Store Connect; other founders are added as Admins. Required for: TestFlight (sharing test builds with co-founders), App Store submission, and Sign in with Apple.
 - [ ] 🔴 **Google Play Developer account** active ($25 one-time). Required for: Internal Testing track (sharing test builds), Play Store submission.
 - [ ] 🔴 **App Store Connect** app record created, screenshots prepared, privacy questionnaire filled.
 - [ ] 🔴 **Play Console** app record created, data safety form filled.
@@ -80,7 +80,7 @@ Legend: 🔴 blocks launch · 🟠 needed during build · 🟡 V1.5 · 🟢 V2+ 
 
 **Ordered rollout (do top-down — earlier items unblock later ones):**
 
-- [ ] 🔴 **Apple Developer Program enrollment** — $99/yr, [developer.apple.com/programs](https://developer.apple.com/programs/). Longest pole; D-U-N-S verification for the Florida LLC can stall enrollment 0–2 days. Unblocks: TestFlight, Sign in with Apple, App Store Connect subscription products, APNs.
+- [ ] 🔴 **Apple Developer Program enrollment — owner: Shai.** $99/yr, [developer.apple.com/programs](https://developer.apple.com/programs/). Longest pole; D-U-N-S verification for the Florida LLC can stall enrollment 0–2 days. Shai enrolls under the Florida LLC entity; once approved, he adds the other founders as Admins on App Store Connect. Unblocks: TestFlight, Sign in with Apple, App Store Connect subscription products, APNs.
 - [ ] 🔴 **Google Play Console enrollment** — $25 one-time, [play.google.com/console](https://play.google.com/console). Identity verification 0–3 days. Unblocks: Play Internal Testing, Play Console subscription products.
 - [ ] 🔴 **RevenueCat account** — free up to $2.5k MTR, [revenuecat.com](https://www.revenuecat.com/). Skim the [Flutter quickstart](https://www.revenuecat.com/docs/getting-started/installation/flutter) while Apple is verifying. (`purchases_flutter` is already in `pubspec.yaml` per `MVP_SPEC.md` §A.2.)
 - [ ] 🔴 **Apple Paid Apps agreement** — once Apple Developer is approved, go to App Store Connect → Agreements, Tax, and Banking → sign the Paid Apps agreement for the Florida LLC. Apple will not release IAP funds until this is signed, AND App Store Connect's product creation flow checks for it. Do this *before* creating IAP products.
@@ -227,6 +227,53 @@ These are not "moderation" — they're fast-failing form validation that prevent
 #### 1.8.e Chip behavior change (D-CHIP-1)
 
 - [ ] 🟠 **Move `BP-XXXXXX` chip default tap from "Copy" to "Open overlap sheet."** Copy becomes a button at the top-right of the sheet. Touches every place a chip renders today (listing detail, business page, post card, profile). One PR, kept behind a feature flag (`chip.tap_opens_overlap`) so we can ship the sheet first and flip behavior atomically.
+
+### 1.9 Onboarding, map & favorites — added 2026-05-04 (co-founder review)
+
+> Items unblocking the new sections of `MVP_SPEC.md` §3.1.a (GMB), §3.1.b (social-data-pull), §3.3 (globe map + POI), §3.14a (brand colors), §3.15 (favorites/wishlist).
+
+#### 1.9.a Google Business Profile (GMB) connect — D-GMB-1
+
+- [ ] 🔴 **Google Cloud project + OAuth client** with `business.manage` scope. Founder A creates the project, configures OAuth consent screen, lists the BeepBip app, requests scope verification (~2–4 weeks; restricted scope review).
+- [ ] 🔴 **Stub the GMB integration in dev with a mock** so we don't block on Google's verification turnaround. Real integration flips on once verification clears.
+- [ ] 🔴 **`category_taxonomy` + `category_aliases` seed.** Curate the top ~40 SoHo-relevant categories with their hashtag/service/interest pools (`MVP_SPEC.md` §5.7a). Seed the alias rows so a GMB primary category resolves to one of our keys 95%+ of the time on a SoHo audit set.
+- [ ] 🟠 **GMB nightly resync job** (`refresh_gmb_business_data`) Edge Function — refreshes hours / photos for connected businesses; per-account rate-limit; logs error to `business_profiles.gmb_sync_error`.
+- [ ] 🟠 **Claim-via-GMB shortcut** for browseable-tier rows: when an owner connects GMB and the `place_id` matches an `imported` row, the row is updated to `source='claimed'` without an out-of-band code (§3.1.a).
+
+#### 1.9.b Social-data-pull (personal onboarding) — D-SOCIAL-1
+
+- [ ] 🔴 **Field-level consent UI** built once and reused per provider. Every pulled field has its own toggle on the post-OAuth review screen; nothing imports without explicit "Save" tap.
+- [ ] 🔴 **Plain-language scope disclosure** *before* the OAuth redirect (e.g. "BeepBip will see your name, photo, public posts, and follows. We will not see your DMs, friends, or location history.").
+- [ ] 🔴 **Disconnect + erase-imported-data flow** in profile settings — revokes the token, optional one-tap "erase imported data" button.
+- [ ] 🔴 **Privacy policy section** dedicated to social import describing exactly what we touch and what we don't (§1.6 dependency).
+- [ ] 🟠 **Confirm Meta App Review scopes** (D-SOCIAL-1) — what we'll actually be granted at non-business consumer tier. Likely V1 ships Apple/Google/Facebook profile-only fields; richer Instagram surfacing is V1.5 with Business Login (D10).
+- [ ] 🟠 **Reaper job** for stale `social_import_candidates` (>30 days, `decision IS NULL`) — nightly; pure data minimization.
+
+#### 1.9.c Globe map + POI overlay — D-MAP-1
+
+- [ ] 🔴 **`maplibre_gl` plugin spike** (1 day, Phase 0) — confirm globe projection works on our supported iOS/Android matrix (iPhone 8+, Android with OpenGL ES 3.0+/Vulkan). Output: 1-page memo with go/no-go and fallback decision.
+- [ ] 🔴 **MapTiler globe-style billing** — confirm vector-tile globe styles aren't a separate paid tier above the 100k loads/mo free ceiling. If they are, budget the cost line in §6.
+- [ ] 🟠 **POI importer** (Overpass API → `pois` table) running nightly per neighborhood polygon. Cache-heavy; rate-limited; first run hand-audited.
+- [ ] 🟠 **POI category style guide** — desaturated palette (§3.14a brand colors), small icons, no border. Distinct visual language from BeepBip pins so commerce stays the primary signal.
+- [ ] 🟠 **"Get directions" handoff** from POI info card to the device's preferred maps app (Apple Maps on iOS, Google Maps on Android).
+- [ ] 🟠 **Performance dashboard** — fps p50/p95 on the globe screen, first-paint ms, battery drain per minute. Trip threshold: any week the p95 fps drops below 30 = drop everything and profile.
+
+#### 1.9.d Brand color system
+
+- [x] ~~🟠 **Brand color system documented**~~ — §3.14a in `MVP_SPEC.md` is the source of truth. Implementation file: `lib/core/theme/app_theme.dart`. Already in code.
+- [ ] 🟠 **Design tokens export** — emit a `BrandColors` Dart constants file so every screen imports brand colors from one place; eliminate inline hex codes (lints will enforce).
+- [ ] 🟠 **Designer brief incorporates brand color system** when the freelance designer engages (§2.2). The designer must work *within* this palette; no reroll. Logo + app icon must be amber-on-vantablack-compatible.
+- [ ] 🟢 **Light vs dark default** — current code defaults to system preference; product decision is "dark is the brand-forward default." Decide whether to force dark for V1 or let users pick. Defer until designer is on board.
+
+#### 1.9.e Favorites & wishlists — D-FAV-1
+
+- [ ] 🟠 **Schema migration** for `favorites` (§5.7b) — new types, table, indexes, RLS. Single migration; backward-compatible (no read regressions).
+- [ ] 🟠 **Heart widget** added to `BusinessCard`, `ListingCard`, `PostCard`, `PlaceCard`. Optimistic UI; debounced server write; counter-cache view (`favorite_counts`) read for "n saves" badge.
+- [ ] 🟠 **Profile "Wishlists" tab** — grouped by target type, sort by date saved or last visited; supports user-named lists (`list_name`).
+- [ ] 🟠 **"Saved places" map layer** — toggleable on the globe; renders favorited businesses, listings (where location can be derived), and POIs as a distinct pin style.
+- [ ] 🟠 **Cold-start tie-in** — the social-data-pull review screen (§3.1.b) lets the user check up to 5 places from their last 30 days of public posts to pre-seed favorites.
+- [ ] 🟡 **Public wishlists (V1.5)** — flip `is_public` toggle; opt-in social-surface mode; agent reads public favorites for `find_similar_people` and overlap signal.
+- [ ] 🟡 **Agent integration** — `read_user_favorites` tool added to the agent's tool layer (§5.8); `get_overlap` returns `shared_favorites` for users with public lists.
 
 ---
 
@@ -471,6 +518,9 @@ Shipped 2026-05-01: public viewer (`BusinessPageScreen`), owner editor (`Busines
 | D-AGENT-3 | Vector DB for agent memory | ✅ Supabase `pgvector` extension on `agent_messages` + `user_preferences_cache`. Stays inside the existing data plane; no new vendor; cost dominated by storage which is cheap. Pinecone/Weaviate revisited only if we hit pgvector's recall limits at >1M vectors. |
 | D-AGENT-5 | Agent multilingual support | ✅ V1 English-only. Spanish + Simplified Chinese in V1.5 (NYC needs both). Tool-result strings stay canonical English; client localizes the rendered cards. |
 | D-COMM-1 | Community mining promotion threshold | ✅ ≥25 distinct users + ≥50 queries over a rolling 30-day window scored against the same hashtag/interest cluster signature → eligible for promotion to a named community. Tunable; document the chosen threshold in the admin tool when it ships. |
+| D-NBHD-1 | Browseable-tier neighborhood set | ✅ **Williamsburg, West Village, Lower East Side, Nolita, NoHo** (5 neighborhoods, locked 2026-05-04). Polygon and importer scope bound to this set; any change requires re-ratification. |
+| D-APPLE-DEV | Apple Developer account ownership | ✅ **Shai owns the Apple Developer enrollment.** Florida LLC is the legal entity on record. Other founders are added as Admins on App Store Connect. |
+| D-COLOR-1 | Brand color system | ✅ Amber-on-vantablack identity locked. Primary `#FF9800`, accent `#FFB74D`, surfaces `#050505` / `#0F0F11`. Full table in `MVP_SPEC.md` §3.14a; implementation in `lib/core/theme/app_theme.dart`. Designer brief works within this palette. |
 
 ---
 
